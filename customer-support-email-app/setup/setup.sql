@@ -25,6 +25,8 @@ CREATE OR REPLACE DATABASE tasty_bytes_customer_support_email;
 --Schema
 CREATE OR REPLACE SCHEMA tasty_bytes_customer_support_email.raw_support;
 CREATE OR REPLACE SCHEMA tasty_bytes_customer_support_email.harmonized;
+CREATE OR REPLACE SCHEMA tasty_bytes_customer_support_email.app;
+
 
 --Warehouse
 CREATE OR REPLACE WAREHOUSE tasty_bytes_customer_support_email_wh with
@@ -45,6 +47,7 @@ GRANT USAGE ON DATABASE tasty_bytes_customer_support_email TO ROLE customer_supp
 GRANT USAGE ON ALL SCHEMAS IN DATABASE tasty_bytes_customer_support_email TO ROLE customer_support_email_role;
 GRANT ALL ON SCHEMA tasty_bytes_customer_support_email.raw_support TO ROLE customer_support_email_role;
 GRANT ALL ON SCHEMA tasty_bytes_customer_support_email.harmonized TO ROLE customer_support_email_role;
+GRANT ALL ON SCHEMA tasty_bytes_customer_support_email.app TO ROLE customer_support_email_role;
 
 -- warehouse grants
 GRANT OWNERSHIP ON WAREHOUSE tasty_bytes_customer_support_email_wh TO ROLE customer_support_email_role COPY CURRENT GRANTS;
@@ -54,9 +57,12 @@ GRANT ALL ON WAREHOUSE tasty_bytes_customer_support_email_wh TO ROLE customer_su
 GRANT ALL ON FUTURE TABLES IN SCHEMA tasty_bytes_customer_support_email.raw_support TO ROLE customer_support_email_role;
 
 GRANT ALL ON FUTURE TABLES IN SCHEMA tasty_bytes_customer_support_email.harmonized TO ROLE customer_support_email_role;
+GRANT ALL ON FUTURE TABLES IN SCHEMA tasty_bytes_customer_support_email.app TO ROLE customer_support_email_role;
+
 GRANT ALL ON FUTURE VIEWS IN SCHEMA tasty_bytes_customer_support_email.raw_support TO ROLE customer_support_email_role;
 
 GRANT ALL ON FUTURE VIEWS IN SCHEMA tasty_bytes_customer_support_email.harmonized TO ROLE customer_support_email_role;
+GRANT ALL ON FUTURE VIEWS IN SCHEMA tasty_bytes_customer_support_email.app TO ROLE customer_support_email_role;
 
 USE ROLE sysadmin;
 
@@ -69,6 +75,11 @@ CREATE OR REPLACE STAGE tasty_bytes_customer_support_email.raw_support.s3load
 COMMENT = 'Quickstarts S3 Stage Connection'
 url = 's3://sfquickstarts/tastybytes-ece/'
 file_format = tasty_bytes_customer_support_email.raw_support.csv_ff;
+
+-- stage for app files
+CREATE OR REPLACE STAGE tasty_bytes_customer_support_email.app.customer_support_email_app 
+DIRECTORY = (ENABLE = TRUE) 
+ENCRYPTION = (TYPE = 'SNOWFLAKE_SSE');
 
 -- raw support tables
 CREATE OR REPLACE TABLE tasty_bytes_customer_support_email.raw_support.email_status_app (
@@ -338,3 +349,4 @@ SELECT
 	input_text,
   chunk_embedding::VECTOR(FLOAT, 768)
 FROM tasty_bytes_chatbot.app.array_table;
+
