@@ -415,5 +415,5 @@ SELECT
 	chunk,
 	input_text,
   chunk_embedding::VECTOR(FLOAT, 768)
-FROM tasty_bytes_chatbot.app.array_table;
+FROM tasty_bytes_customer_support_email.harmonized.array_table;
 
