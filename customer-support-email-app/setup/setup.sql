@@ -315,6 +315,73 @@ AS '
     return responderValue;
 ';
 
+CREATE OR REPLACE PROCEDURE tasty_bytes_customer_support_email.raw_support.insert_response_app("EMAIL_ID" VARCHAR(16777216), "RESPONSE" VARCHAR(16777216))
+RETURNS VARCHAR(16777216)
+LANGUAGE JAVASCRIPT
+EXECUTE AS OWNER
+AS '
+try {
+    var temp = RESPONSE.replace(/''''''''/g, "''''''''''''''''");
+    
+    // Construct JSON string
+    var jsonStr = `{"Response": "${temp.replace(/"/g, ''\\\\"'')}"}`;
+    
+    // Create temporary table and insert email data
+    var query1 = `
+        CREATE OR REPLACE TEMPORARY TABLE raw_support.email_data_gen_tt_response_app
+        (
+            email_id VARCHAR(16777216),
+            email_response VARIANT,
+            sent_ts TIMESTAMP_NTZ(9)
+        )
+        AS
+        SELECT
+            :1 AS email_id,
+            PARSE_JSON(:2) AS email_response,
+            current_timestamp() as sent_ts
+    `;
+    var statement1 = snowflake.createStatement({sqlText: query1, binds: [EMAIL_ID, jsonStr]});
+    var result1 = statement1.execute();
+    if (!result1.next()) {
+        throw new Error("Failed to create temporary table or insert data");
+    }
+    
+    // Insert email status for new emails
+    var query2 = `
+        INSERT INTO raw_support.email_response_app
+        (EMAIL_ID, EMAIL_RESPONSE, SENT_TS)
+        SELECT
+            email_id,
+            email_response,
+            sent_ts
+        FROM raw_support.email_data_gen_tt_response_app
+    `;
+    var statement2 = snowflake.createStatement({sqlText: query2});
+    var result2 = statement2.execute();
+    if (!result2.next()) {
+        throw new Error("Failed to insert email response");
+    }
+
+    // Update the EMAIL_STATUS table setting RESPONDED_FLAG to True and last_updated_ts to CURRENT_TIMESTAMP
+    var update_status_command = "UPDATE raw_support.email_status_app SET RESPONDED_FLAG = TRUE, last_updated_ts = CURRENT_TIMESTAMP() WHERE EMAIL_ID = ?";
+    var update_status_stmt = snowflake.createStatement({
+        sqlText: update_status_command,
+        binds: [EMAIL_ID]
+    });
+    var update_status_result = update_status_stmt.execute();
+    if (update_status_result.getRowCount() == 0) {
+        throw new Error("Email status update failed: no rows affected");
+    }
+
+    // Return success message after successful updates
+    return "Email Sent Successfully";
+
+} catch (err) {
+    // Error handling
+    return "Failed to insert: " + err.message;
+}
+';
+
 -- load data from S3
 COPY INTO tasty_bytes_customer_support_email.raw_support.email_status_app
 FROM @tasty_bytes_customer_support_email.raw_support.s3load/raw_support/email_status_app/;
