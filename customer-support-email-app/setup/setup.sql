@@ -149,7 +149,12 @@ class text_chunker:
         )
     
         chunks = text_splitter.create_documents(text_raw)
-        df = pd.DataFrame(chunks, columns=[''chunks'',''meta''])
+        
+	# Extract attributes from documents
+        data = [{"content": chunk.page_content, "metadata": chunk.metadata["start_index"]} for chunk in chunks]
+
+        # Convert the data into a pandas DataFrame
+        df = pd.DataFrame(data)
         
         yield from df.itertuples(index=False, name=None)
 ';
