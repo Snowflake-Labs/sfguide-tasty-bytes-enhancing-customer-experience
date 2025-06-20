@@ -240,21 +240,57 @@ AS '
                 email_id,
                 email,
                 input_text AS context,
-                snowflake.cortex.complete(''mistral-large'', TO_VARIANT(CONCAT(
-                    ''Provide a response to this customer email only if you can fully address it with the provided documentation, do not provide generic responses. If you can address fully and response is available, follow Answer Format provided Strictly and Provide a valid JSON. If not, return NULL. Nothing else. Email: '',
-                    email,
-                    ''. Context from documentation: '',
-                    context,
-                    '' Answer Format: {"Response": "{"responder":"<agent or auto>", "subject": "<subject_line_of_email>", "body": "<email_body>"}"}.''
-                ))) AS response
+                SNOWFLAKE.CORTEX.COMPLETE(
+                    ''mistral-large2'',
+                    ARRAY_CONSTRUCT(
+                        OBJECT_CONSTRUCT(
+                            ''role'', ''system'',
+                            ''content'', ''You are an AI assistant that composes precise email responses. Only respond if you can fully address the email using the provided documentation.''
+                        ),
+                        OBJECT_CONSTRUCT(
+                            ''role'', ''user'',
+                            ''content'', CONCAT(
+                                ''Provide a response to this customer email only if you can fully address it with the provided documentation. Do not provide generic responses. '',
+                                ''If you can address it fully, set responder to "auto" and provide the email response in the body field. If you cannot answer fully, set responder to "agent". If you reference the mobile app, set responder to "agent".'',
+                                ''Email: '', email,
+                                ''. Context from documentation: '', context
+                            )
+                        )
+                    ),
+                    OBJECT_CONSTRUCT(
+                        ''response_format'', 
+                        PARSE_JSON(''{
+                            "type": "json",
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "responder": {
+                                        "type": "string",
+                                        "enum": ["auto", "agent"],
+                                        "description": "Whether this can be handled automatically or needs an agent"
+                                    },
+                                    "subject": {
+                                        "type": "string",
+                                        "description": "Subject line for the email response"
+                                    },
+                                    "body": {
+                                        "type": "string",
+                                        "description": "The email response body, empty if responder is agent"
+                                    }
+                                },
+                                "required": ["responder", "subject", "body"]
+                            }
+                        }'')
+                    )
+                ):structured_output[0]:raw_message AS RESPONSE
             FROM _ranked_chunks
         )
         SELECT
             email_id,
             email AS original_email,
             CASE
-                WHEN TRIM(TRIM(response, ''\\\\t\\\\n''), '' '') = ''NULL'' THEN NULL
-                ELSE TRIM(TRIM(response, ''\\\\t\\\\n''), '' '')
+                WHEN response:responder = ''agent'' THEN NULL
+                ELSE response
             END AS auto_response
         FROM _responses
         WHERE auto_response IS NOT NULL;
